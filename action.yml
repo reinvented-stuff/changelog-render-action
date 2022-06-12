@@ -1,0 +1,123 @@
+---
+# yamllint disable rule:line-length
+
+name: Changelog
+description: Renders changelog
+
+
+inputs:
+  long_changelog_export_filename:
+    description: 'Path for long changelog to export into'
+    type: string
+    default: ".changelog_long.md"
+
+  short_changelog_export_filename:
+    description: 'Path for short changelog to export into'
+    type: string
+    default: ".changelog_short.md"
+
+  long_changelog_format:
+    description: 'Format for long changelog'
+    type: string
+    default: "%w(1000)* %cd %an <%ae>%n%w(1000,0,2)- %s%n"
+
+  short_changelog_format:
+    description: 'Format for short changelog'
+    type: string
+    default: "%w(200,0,2)- %s (%an <%ae>)"
+
+  changelog_ref_start:
+    description: 'Ref to start changelog from (default: last tag)'
+    type: string
+    required: false
+
+  changelog_ref_end:
+    description: 'Ref to start changelog from (default: HEAD)'
+    type: string
+    required: false
+
+  print_out_changelogs:
+    description: 'Whether to print out rendered changelogs or not'
+    type: boolean
+    default: false
+
+
+outputs:
+  long_changelog_filename:
+    description: "Path to rendered long changelog"
+    value: ${{ steps.generate_changelog.outputs.long_changelog_filename }}
+
+  short_changelog_filename:
+    description: "Path to rendered short changelog"
+    value: ${{ steps.generate_changelog.outputs.short_changelog_filename }}
+
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Generate changelog
+      id: generate_changelog
+      shell: bash
+      run: |
+
+        echo "::debug::inputs.changelog_ref_start: '${{ inputs.changelog_ref_start }}'"
+        echo "::debug::inputs.changelog_ref_end: '${{ inputs.changelog_ref_end }}'"
+
+        if [[ -z "${{ inputs.changelog_ref_start }}" ]]; then
+          described=$(git describe --tags || git rev-list --max-parents=0 HEAD)
+          described_parts=( ${described//-/ } )
+          changelog_ref_start="${described_parts[0]}"
+        else
+          changelog_ref_start=${{ inputs.changelog_ref_start }}
+        fi
+
+        echo "::debug::changelog_ref_start: '${{ changelog_ref_start }}'"
+
+        if [[ -z "${{ inputs.changelog_ref_end }}" ]]; then
+          changelog_ref_end="HEAD"
+        else
+          changelog_ref_end=${{ inputs.changelog_ref_end }}
+        fi
+
+        echo "::debug::changelog_ref_end: '${{ changelog_ref_end }}'"
+
+        long_changelog_export_filename="${{ inputs.long_changelog_export_filename }}"
+        short_changelog_export_filename="${{ inputs.short_changelog_export_filename }}"
+
+        echo "::debug::long_changelog_export_filename: '${{ long_changelog_export_filename }}'"
+        echo "::debug::short_changelog_export_filename: '${{ short_changelog_export_filename }}'"
+
+        git log \
+          --pretty=oneline \
+          --format='${{ inputs.long_changelog_format }}' \
+          --date="format:%a %b %d %Y" \
+          "${changelog_ref_start}".."${changelog_ref_end}" > "${long_changelog_export_filename}"
+
+        git log \
+          --pretty=oneline \
+          --format='${{ inputs.short_changelog_format }}' \
+          --date="format:%a %b %d %Y" \
+          "${changelog_ref_start}".."${changelog_ref_end}" | sort > "${short_changelog_export_filename}"
+
+        echo "::set-output name=long_changelog_filename::${long_changelog_export_filename}"
+        echo "::set-output name=short_changelog_filename::${short_changelog_export_filename}"
+
+
+    - name: Display long changelog
+      if: inputs.print_out_changelogs
+      id: print_out_long_changelog
+      shell: bash
+      run: |
+        cat "${{ inputs.long_changelog_export_filename }}"
+        cat "${{ inputs.short_changelog_export_filename }}"
+
+    - name: Display short changelog
+      if: inputs.print_out_changelogs
+      id: print_out_short_changelog
+      shell: bash
+      run: |
+        cat "${{ inputs.long_changelog_export_filename }}"
+        cat "${{ inputs.short_changelog_export_filename }}"
+
+...
