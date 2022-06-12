@@ -36,6 +36,11 @@ inputs:
     type: string
     required: false
 
+  changelog_header:
+    description: 'Header before the actual changelog (default: # Changelog)'
+    type: string
+    default: "# Changelog\n"
+
   print_out_changelogs:
     description: 'Whether to print out rendered changelogs or not'
     type: boolean
@@ -43,13 +48,13 @@ inputs:
 
 
 outputs:
-  long_changelog_filename:
+  long_changelog_export_filename:
     description: "Path to rendered long changelog"
-    value: ${{ steps.generate_changelog.outputs.long_changelog_filename }}
+    value: ${{ steps.generate_changelog.outputs.long_changelog_export_filename }}
 
-  short_changelog_filename:
+  short_changelog_export_filename:
     description: "Path to rendered short changelog"
-    value: ${{ steps.generate_changelog.outputs.short_changelog_filename }}
+    value: ${{ steps.generate_changelog.outputs.short_changelog_export_filename }}
 
 
 runs:
@@ -72,7 +77,7 @@ runs:
           changelog_ref_start=${{ inputs.changelog_ref_start }}
         fi
 
-        echo "::debug::changelog_ref_start: '${{ changelog_ref_start }}'"
+        echo "::debug::changelog_ref_start: '${changelog_ref_start}'"
 
         if [[ -z "${{ inputs.changelog_ref_end }}" ]]; then
           changelog_ref_end="HEAD"
@@ -80,28 +85,42 @@ runs:
           changelog_ref_end=${{ inputs.changelog_ref_end }}
         fi
 
-        echo "::debug::changelog_ref_end: '${{ changelog_ref_end }}'"
+        echo "::debug::changelog_ref_end: '${changelog_ref_end}'"
 
         long_changelog_export_filename="${{ inputs.long_changelog_export_filename }}"
         short_changelog_export_filename="${{ inputs.short_changelog_export_filename }}"
 
-        echo "::debug::long_changelog_export_filename: '${{ long_changelog_export_filename }}'"
-        echo "::debug::short_changelog_export_filename: '${{ short_changelog_export_filename }}'"
+        echo "::debug::long_changelog_export_filename: '${long_changelog_export_filename}'"
+        echo "::debug::short_changelog_export_filename: '${short_changelog_export_filename}'"
+
+        if [[ -n "${{ inputs.changelog_header }}" ]]; then
+
+          cat << EOF >> "${long_changelog_export_filename}"
+        ${{ inputs.changelog_header }}
+        
+        EOF
+        
+          cat << EOF >> "${short_changelog_export_filename}"
+        ${{ inputs.changelog_header }}
+        
+        EOF
+
+        fi
 
         git log \
           --pretty=oneline \
           --format='${{ inputs.long_changelog_format }}' \
           --date="format:%a %b %d %Y" \
-          "${changelog_ref_start}".."${changelog_ref_end}" > "${long_changelog_export_filename}"
+          "${changelog_ref_start}".."${changelog_ref_end}" >> "${long_changelog_export_filename}"
 
         git log \
           --pretty=oneline \
           --format='${{ inputs.short_changelog_format }}' \
           --date="format:%a %b %d %Y" \
-          "${changelog_ref_start}".."${changelog_ref_end}" | sort > "${short_changelog_export_filename}"
+          "${changelog_ref_start}".."${changelog_ref_end}" | sort >> "${short_changelog_export_filename}"
 
-        echo "::set-output name=long_changelog_filename::${long_changelog_export_filename}"
-        echo "::set-output name=short_changelog_filename::${short_changelog_export_filename}"
+        echo "::set-output name=long_changelog_export_filename::${long_changelog_export_filename}"
+        echo "::set-output name=short_changelog_export_filename::${short_changelog_export_filename}"
 
 
     - name: Display long changelog
@@ -110,14 +129,12 @@ runs:
       shell: bash
       run: |
         cat "${{ inputs.long_changelog_export_filename }}"
-        cat "${{ inputs.short_changelog_export_filename }}"
 
     - name: Display short changelog
       if: inputs.print_out_changelogs
       id: print_out_short_changelog
       shell: bash
       run: |
-        cat "${{ inputs.long_changelog_export_filename }}"
         cat "${{ inputs.short_changelog_export_filename }}"
 
 ...
